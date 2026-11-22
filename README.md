@@ -2,7 +2,7 @@
 
 REST API for the SalonBook salon appointment booking platform.
 
-**Client repository:** `<add link>` · **Live API:** `<add link>` · **Live website:** `<add link>`
+**Client repository:** https://github.com/Rokon70/salonbook-client · **Live API:** `<add live API link>` · **Live website:** `<add live website link>`
 
 ## Important Features
 - Services CRUD (admin), public active-service listing with **search, category filter and price sorting**
@@ -18,7 +18,7 @@ Node.js, Express.js, MongoDB (native driver), jose (JWT), Stripe, Multer, ImgBB
 
 ## Installation
 ```bash
-git clone <server-repo-url>
+git clone https://github.com/Rokon70/salonbook-server.git
 cd salonbook-server
 npm install
 cp .env.example .env   # then fill in the values
