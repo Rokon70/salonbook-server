@@ -1,6 +1,8 @@
-// Usage: npm run seed  (adds 8 sample services; images can be replaced from the admin panel)
 import "dotenv/config";
+import dns from "node:dns";
 import { MongoClient } from "mongodb";
+
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const img = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=900&q=80`;
 const services = [
