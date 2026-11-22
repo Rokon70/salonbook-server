@@ -60,4 +60,4 @@ Copy the printed `whsec_...` into `STRIPE_WEBHOOK_SECRET`.
 ## Deployment (Vercel)
 `vercel.json` + `api/index.js` are included. Add all environment variables in the Vercel dashboard and register
 `https://<your-api>/api/payments/webhook` in the Stripe dashboard (events: `checkout.session.completed`,
-`checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`).
+`checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`).

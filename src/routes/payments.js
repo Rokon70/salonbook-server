@@ -7,6 +7,29 @@ import { asyncHandler, HttpError } from "../utils/helpers.js";
 const router = Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_missing");
 
+// Shared by the customer and admin transaction lists so both show the same enriched data.
+async function enrichTransactions(db, list) {
+  const apptIds = list.map((t) => t.appointmentId).filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+  const appts = await db.collection("appointments").find({ _id: { $in: apptIds } }).toArray();
+  const services = await db.collection("services").find({ _id: { $in: appts.map((a) => a.serviceId) } }).toArray();
+  const userIds = [...new Set(list.map((t) => t.customerId))].flatMap((id) => (ObjectId.isValid(id) ? [id, new ObjectId(id)] : [id]));
+  const users = await db.collection("users").find({ _id: { $in: userIds } }).toArray();
+
+  const apptMap = Object.fromEntries(appts.map((a) => [String(a._id), a]));
+  const serviceMap = Object.fromEntries(services.map((s) => [String(s._id), s]));
+  const userMap = Object.fromEntries(users.map((u) => [String(u._id), u]));
+
+  return list.map((t) => {
+    const a = apptMap[t.appointmentId];
+    return {
+      ...t,
+      customer: { name: userMap[t.customerId]?.name || "Unknown", email: userMap[t.customerId]?.email || "-" },
+      serviceName: a ? serviceMap[String(a.serviceId)]?.serviceName || "Deleted service" : "-",
+      appointmentDate: a?.appointmentDate || "-",
+    };
+  });
+}
+
 // CUSTOMER: create Stripe Checkout session for a confirmed + unpaid appointment
 router.post("/checkout/:appointmentId", verifyJWT, requireRole("customer"), asyncHandler(async (req, res) => {
   const _id = toObjectId(req.params.appointmentId);
@@ -47,35 +70,14 @@ router.get("/session/:sessionId", verifyJWT, requireRole("customer"), asyncHandl
 router.get("/mine", verifyJWT, requireRole("customer"), asyncHandler(async (req, res) => {
   const db = await getDb();
   const list = await db.collection("transactions").find({ customerId: req.user.id }).sort({ createdAt: -1 }).toArray();
-  res.json({ transactions: list });
+  res.json({ transactions: await enrichTransactions(db, list) });
 }));
 
 // ADMIN: all transactions (read-only, there is NO endpoint to edit a payment)
 router.get("/transactions", verifyJWT, requireRole("admin"), asyncHandler(async (_req, res) => {
   const db = await getDb();
   const list = await db.collection("transactions").find().sort({ createdAt: -1 }).toArray();
-
-  const apptIds = list.map((t) => t.appointmentId).filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
-  const appts = await db.collection("appointments").find({ _id: { $in: apptIds } }).toArray();
-  const services = await db.collection("services").find({ _id: { $in: appts.map((a) => a.serviceId) } }).toArray();
-  const userIds = [...new Set(list.map((t) => t.customerId))].flatMap((id) => (ObjectId.isValid(id) ? [id, new ObjectId(id)] : [id]));
-  const users = await db.collection("users").find({ _id: { $in: userIds } }).toArray();
-
-  const apptMap = Object.fromEntries(appts.map((a) => [String(a._id), a]));
-  const serviceMap = Object.fromEntries(services.map((s) => [String(s._id), s]));
-  const userMap = Object.fromEntries(users.map((u) => [String(u._id), u]));
-
-  res.json({
-    transactions: list.map((t) => {
-      const a = apptMap[t.appointmentId];
-      return {
-        ...t,
-        customer: { name: userMap[t.customerId]?.name || "Unknown", email: userMap[t.customerId]?.email || "-" },
-        serviceName: a ? serviceMap[String(a.serviceId)]?.serviceName || "Deleted service" : "-",
-        appointmentDate: a?.appointmentDate || "-",
-      };
-    }),
-  });
+  res.json({ transactions: await enrichTransactions(db, list) });
 }));
 
 /**
@@ -96,6 +98,11 @@ export async function stripeWebhook(req, res) {
     const session = event.data.object;
     const appointmentId = session.metadata?.appointmentId;
     const customerId = session.metadata?.customerId;
+    // Ignore unrelated or malformed events instead of throwing a 500 that Stripe would retry forever.
+    if (!appointmentId || !ObjectId.isValid(appointmentId)) {
+      res.json({ received: true });
+      return;
+    }
 
     const saveTransaction = (status) =>
       db.collection("transactions").updateOne(
@@ -123,7 +130,11 @@ export async function stripeWebhook(req, res) {
         { _id: new ObjectId(appointmentId) },
         { $set: { paymentStatus: "paid", updatedAt: new Date() } }
       );
-    } else if (event.type === "checkout.session.async_payment_failed" && appointmentId) {
+    } else if (
+      (event.type === "checkout.session.async_payment_failed" || event.type === "checkout.session.expired") &&
+      appointmentId
+    ) {
+      // Failed / expired checkouts are recorded as failed, but never make an appointment paid.
       await saveTransaction("failed");
     }
     res.json({ received: true });
