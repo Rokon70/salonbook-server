@@ -4,7 +4,8 @@ import { MongoClient } from "mongodb";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
-const img = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=900&q=80`;
+// Fixed 4:3 crop keeps every service image the same size, including portrait originals.
+const img = (id) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=900&h=675&q=80`;
 const services = [
   ["Signature Haircut & Blow-dry", "Haircut & Styling", 45, 60, "A precision cut tailored to your face shape, finished with a smooth blow-dry.", "photo-1560066984-138dadb4c035"],
   ["Balayage Hair Coloring", "Hair Coloring", 140, 180, "Hand-painted highlights for soft, natural-looking dimension and grow-out.", "photo-1562322140-8baeececf3df"],
