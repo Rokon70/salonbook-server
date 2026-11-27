@@ -14,7 +14,15 @@ import uploadRouter from "./routes/upload.js";
 const app = express();
 app.set("trust proxy", 1);
 
-const allowed = (process.env.CLIENT_URL || "http://localhost:3000").split(",").map((s) => s.trim());
+const configured = (process.env.CLIENT_URL || "http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean);
+const ownClients = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://salonbook-client-rokon70.vercel.app",
+  "https://salonbook-client-gamma-three.vercel.app",
+  "https://salonbook-client-v2.vercel.app",
+];
+const allowed = [...new Set([...configured, ...ownClients])];
 app.use(cors({ origin: allowed, credentials: true }));
 
 // Stripe needs the RAW body to verify the signature -> must be registered before express.json()
